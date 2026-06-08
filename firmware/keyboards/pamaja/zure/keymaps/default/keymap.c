@@ -106,21 +106,22 @@ typedef struct {
     uint16_t active_kc;
     bool tap_only;     // true: 修飾キーも含めて全て1回タップ
     int16_t tap_adc;   // tap_only モード用：タップ時のADC値（戻り検出用）
+    uint8_t release_count;  // 解除デバウンス用：中立判定が連続した回数
 } axis_t;
 
 static axis_t axes[] = {
     // 左スティック：基板を90°回転して取り付けているため GP26↔GP27 を入れ替え
     // GND修理でフルレンジになったので閾値を大きくする (enter=200, exit=100)
     // 物理X軸（左右） = GP27：左=ADC-→[1,1] LCTRL  右=ADC+→[1,3] MO(2)
-    { GP27, LEFT_X_MID, 200, 100, 1, 1, 1, 3, DIR_NEUTRAL, KC_NO, false, 0 },
+    { GP27, LEFT_X_MID, 200, 100, 1, 1, 1, 3, DIR_NEUTRAL, KC_NO, false, 0, 0 },
     // 物理Y軸（上下） = GP26：下=ADC-→[2,2] LSHIFT  上=ADC+→[0,2] MO(3)
-    { GP26, LEFT_Y_MID, 200, 100, 2, 2, 0, 2, DIR_NEUTRAL, KC_NO, false, 0 },
+    { GP26, LEFT_Y_MID, 200, 100, 2, 2, 0, 2, DIR_NEUTRAL, KC_NO, false, 0, 0 },
     // 右スティック：基板を90°回転 (左スティックとは逆方向) + 配線極性も逆
-    // tap_only=true: 修飾キーも含めて全て1回タップ動作
-    // 物理X軸 = GP29：右=ADC-→[1,8] LGUI、左=ADC+→[1,6] SPACE
-    { GP29, RIGHT_X_MID, 250, 180, 1, 8, 1, 6, DIR_NEUTRAL, KC_NO, true,  0 },
-    // 物理Y軸 = GP28：上=ADC-→[0,7] ENTER、下=ADC+→[2,7] RALT
-    { GP28, RIGHT_Y_MID, 250, 180, 0, 7, 2, 7, DIR_NEUTRAL, KC_NO, true,  0 },
+    // tap_only=false: 倒している間ホールド（Shift/レイヤー切替などを保持できる）
+    // 物理X軸 = GP29：右=ADC-→[1,8]、左=ADC+→[1,6]
+    { GP29, RIGHT_X_MID, 250, 180, 1, 8, 1, 6, DIR_NEUTRAL, KC_NO, false, 0, 0 },
+    // 物理Y軸 = GP28：上=ADC-→[0,7]、下=ADC+→[2,7]
+    { GP28, RIGHT_Y_MID, 250, 180, 0, 7, 2, 7, DIR_NEUTRAL, KC_NO, false, 0, 0 },
 };
 
 #define AXES_COUNT (sizeof(axes) / sizeof(axes[0]))
@@ -178,6 +179,10 @@ static void release_all_stick_keys(void) {
 // （メカニカル・ディテントで中心まで戻れないスティック対策）
 #define TAP_REARM_DISTANCE 50
 
+// ホールド軸の解除デバウンス：中立判定が連続このサンプル数続いたら離す（10ms間隔）
+// ADCが一瞬中心に飛んでも Shift 等が断続しないようにする。5 = 50ms。
+#define RELEASE_DEBOUNCE 5
+
 static void axis_update(axis_t *ax) {
     int16_t raw = analogReadPin(ax->pin);
     int16_t delta = raw - ax->center;
@@ -210,7 +215,22 @@ static void axis_update(axis_t *ax) {
         }
     }
 
-    if (target == ax->state) return;
+    if (target == ax->state) {
+        ax->release_count = 0;  // 方向を維持中なのでリセット
+        return;
+    }
+
+    // 解除（方向→中立）のデバウンス：
+    // ホールド中にスティックのADCが一瞬中心に飛んでも即解除しない。
+    // 中立判定が RELEASE_DEBOUNCE 回連続したときだけ本当に離す。
+    // （tap_only モードは即時解除のままにする）
+    if (!ax->tap_only && target == DIR_NEUTRAL) {
+        if (ax->release_count < RELEASE_DEBOUNCE) {
+            ax->release_count++;
+            return;  // まだ離さない（一瞬のジャンプの可能性）
+        }
+    }
+    ax->release_count = 0;
 
     if (ax->active_kc != KC_NO) {
         stick_release(ax->active_kc, ax->tap_only);
