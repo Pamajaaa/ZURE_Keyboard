@@ -1,5 +1,7 @@
 #pragma once
 
+#define DEBOUNCE 10
+
 // HIDゲームパッド軸（両スティック）
 #define JOYSTICK_AXIS_COUNT 4
 #define JOYSTICK_BUTTON_COUNT 4
