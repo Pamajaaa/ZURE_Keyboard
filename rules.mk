@@ -1,0 +1,10 @@
+# MCU/Bootloader
+BOOTLOADER = rp2040
+CONSOLE_ENABLE = yes
+JOYSTICK_ENABLE = yes
+JOYSTICK_DRIVER = analog
+COMBO_ENABLE = yes
+ANALOG_DRIVER_REQUIRED = yes
+
+# Custom Debounce Algorithm (Zero Input Delay)
+DEBOUNCE_TYPE = asym_eager_defer_pk
