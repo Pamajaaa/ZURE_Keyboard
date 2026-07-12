@@ -316,27 +316,37 @@ void housekeeping_task_user(void) {
     }
 
     if (current_mode == MODE_ANALOG) {
-        // アナログモード：スティックADCを読み取ってゲームパッドの軸として出力
+        // アナログモード：左スティックのみゲームパッドの軸として出力
         joystick_set_axis(0, map_axis(a28, LEFT_X_MIN, LEFT_X_MID, LEFT_X_MAX)); // 左X
         joystick_set_axis(1, map_axis(a29, LEFT_Y_MIN, LEFT_Y_MID, LEFT_Y_MAX)); // 左Y
-        joystick_set_axis(2, map_axis(a27, RIGHT_X_MIN, RIGHT_X_MID, RIGHT_X_MAX)); // 右X
-        joystick_set_axis(3, map_axis(a26, RIGHT_Y_MIN, RIGHT_Y_MID, RIGHT_Y_MAX)); // 右Y
-        joystick_flush();
+        joystick_set_axis(2, 0); // 右スティックはキー入力として使うため0固定
+        joystick_set_axis(3, 0);
     } else {
         // HIDジョイスティック軸は常に0に固定
         for (uint8_t i = 0; i < JOYSTICK_AXIS_COUNT; i++) {
             joystick_set_axis(i, 0);
         }
-        joystick_flush();
+    }
+    joystick_flush();
 
-        if (combo_active) {
-            // モード切替の同時押し中は、スティック入力を即座にキャンセルして文字の連続送信を防ぐ
-            release_all_stick_keys();
-        } else {
-            // 通常のスティック→キー変換
-            for (uint8_t i = 0; i < AXES_COUNT; i++) {
-                axis_update(&axes[i]);
+    if (combo_active) {
+        // モード切替の同時押し中は、スティック入力を即座にキャンセルして文字の連続送信を防ぐ
+        release_all_stick_keys();
+    } else {
+        // 通常のスティック→キー変換
+        for (uint8_t i = 0; i < AXES_COUNT; i++) {
+            if (current_mode == MODE_ANALOG && i < 2) {
+                // アナログモード時は左スティック(i=0,1)のキーボード入力は無視
+                if (axes[i].active_kc != KC_NO) {
+                    stick_release(axes[i].active_kc, axes[i].tap_only);
+                    axes[i].active_kc = KC_NO;
+                    axes[i].state = DIR_NEUTRAL;
+                    axes[i].pending_target = DIR_NEUTRAL;
+                    axes[i].debounce_count = 0;
+                }
+                continue;
             }
+            axis_update(&axes[i]);
         }
     }
 }
