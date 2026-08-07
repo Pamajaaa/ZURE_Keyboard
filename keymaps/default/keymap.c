@@ -358,8 +358,10 @@ static void set_stick_mode(stick_mode_t mode) {
 
     if (current_mode == MODE_WASD || current_mode == MODE_ANALOG) {
         default_layer_set(1UL << 4);
+        combo_disable(); // ゲームモード中はコンボ判定を無効化して遅延をゼロにする
     } else {
         default_layer_set(1UL << 0);
+        combo_enable();  // タイピングモード中はコンボを有効化する
     }
 
     const char *mode_str = "";
